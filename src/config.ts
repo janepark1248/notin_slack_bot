@@ -12,6 +12,7 @@ export const config = {
   slack: {
     botToken: requireEnv("SLACK_BOT_TOKEN"),
     appToken: requireEnv("SLACK_APP_TOKEN"),
+    fallbackUserId: process.env.FALLBACK_USER_ID || "",
   },
   notion: {
     token: requireEnv("NOTION_TOKEN"),

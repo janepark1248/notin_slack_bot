@@ -1,7 +1,9 @@
 import { app } from "./app";
+import { config } from "../config";
 import { getPages, syncNow } from "../notion/cache";
 import { searchPages } from "../search/relevance";
 import { generateAnswer } from "../ai/claude";
+import { markdownToMrkdwn, toBlocks } from "./format";
 
 function stripMention(text: string): string {
   return text.replace(/<@[A-Z0-9]+>/g, "").trim();
@@ -44,13 +46,30 @@ export function registerHandlers(): void {
       }
 
       const results = searchPages(question, pages);
+
+      if (results.length === 0) {
+        const fallback = config.slack.fallbackUserId
+          ? `\n<@${config.slack.fallbackUserId}> 님, 이 질문에 답변 부탁드립니다!`
+          : "";
+        const text = `관련된 노션 문서를 찾을 수 없습니다. 질문을 다른 키워드로 다시 시도해 주세요.${fallback}`;
+        await client.chat.update({
+          channel: event.channel,
+          ts: loading.ts!,
+          text,
+        });
+        return;
+      }
+
       const answer = await generateAnswer(question, results);
       const sources = formatSources(results);
+
+      const mrkdwn = markdownToMrkdwn(answer) + sources;
 
       await client.chat.update({
         channel: event.channel,
         ts: loading.ts!,
-        text: answer + sources,
+        text: mrkdwn,
+        blocks: toBlocks(mrkdwn),
       });
     } catch (err) {
       console.error("[handler] Error processing mention:", err);
