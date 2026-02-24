@@ -22,4 +22,5 @@ export const config = {
     apiKey: requireEnv("ANTHROPIC_API_KEY"),
   },
   syncIntervalMs: Number(process.env.SYNC_INTERVAL_MS) || 24 * 24 * 60 * 60 * 1000, // 24 days (must fit 32-bit int max ~24.8 days)
+  reconnectIntervalMs: Number(process.env.RECONNECT_INTERVAL_MS) || 4 * 60 * 60 * 1000, // 4 hours
 } as const;
