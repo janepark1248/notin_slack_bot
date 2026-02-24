@@ -61,10 +61,12 @@ async function main(): Promise<void> {
   startPeriodicSync();
 
   // 6. Periodic socket health check
-  const healthCheckTimer = setInterval(async () => {
+  const healthCheckTimer = setInterval(() => {
     if (!isReconnecting) {
-      console.log("[bot] Periodic socket reconnect (health check)...");
-      await reconnect();
+      console.log("[bot] Periodic socket reconnect...");
+      reconnect().catch((err) => {
+        console.error("[bot] Periodic reconnect error:", err);
+      });
     }
   }, config.reconnectIntervalMs);
 
@@ -73,7 +75,11 @@ async function main(): Promise<void> {
     console.log("\n[bot] Shutting down...");
     clearInterval(healthCheckTimer);
     stopPeriodicSync();
-    await app.stop();
+    try {
+      await app.stop();
+    } catch (err) {
+      console.error("[bot] Error during shutdown:", err);
+    }
     process.exit(0);
   };
 
