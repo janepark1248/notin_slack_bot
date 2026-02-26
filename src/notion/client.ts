@@ -55,11 +55,27 @@ async function getPageBlocks(pageId: string): Promise<any[]> {
   return blocks;
 }
 
-function extractChildPageIds(blocks: any[]): string[] {
+async function extractChildPageIds(blocks: any[]): Promise<string[]> {
   const ids: string[] = [];
+  const nestedTypes = [
+    "column_list",
+    "column",
+    "callout",
+    "toggle",
+    "bulleted_list_item",
+    "numbered_list_item",
+    "quote",
+    "synced_block",
+  ];
+
   for (const b of blocks) {
     if (b.type === "child_page") {
       ids.push(b.id);
+    } else if (b.has_children && nestedTypes.includes(b.type)) {
+      await delay(RATE_LIMIT_DELAY);
+      const nested = await getPageBlocks(b.id);
+      const nestedIds = await extractChildPageIds(nested);
+      ids.push(...nestedIds);
     }
   }
   return ids;
@@ -86,9 +102,9 @@ export async function crawlAllPages(
     const cached = existingCache.get(pageId);
 
     if (cached && cached.lastEditedAt === lastEditedTime) {
-      // Cache hit: content unchanged, skip block fetch
-      // Notion guarantees parent last_edited_time changes on structural child changes,
-      // so no need to re-discover children on cache hit.
+      // Cache hit: content unchanged, use cached content but still traverse children
+      // because a grandchild content change only updates that grandchild's last_edited_time,
+      // not the parent's, so we must recurse to avoid missing deep content changes.
       pages.push({
         id: pageId,
         title,
@@ -97,13 +113,18 @@ export async function crawlAllPages(
         lastSyncedAt: new Date().toISOString(),
         lastEditedAt: lastEditedTime,
       });
+      const cachedBlocks = await getPageBlocks(pageId);
+      const cachedChildIds = await extractChildPageIds(cachedBlocks);
+      for (const childId of cachedChildIds) {
+        await visit(childId);
+      }
       return;
     }
 
     // Cache miss or changed: fetch blocks once for both content and child discovery
     const blocks = await getPageBlocks(pageId);
     const content = parseBlocks(blocks);
-    const childIds = extractChildPageIds(blocks);
+    const childIds = await extractChildPageIds(blocks);
 
     pages.push({
       id: pageId,

@@ -74,10 +74,11 @@ describe("crawlAllPages", () => {
     expect(result[0].lastEditedAt).toBe("2024-01-02T00:00:00.000Z");
   });
 
-  it("캐시와 last_edited_time이 동일하면 블록 fetch를 건너뛰고 캐시 내용을 사용한다", async () => {
+  it("캐시와 last_edited_time이 동일하면 블록 파싱은 건너뛰고 캐시 내용을 사용하되 자식 탐색을 위해 블록은 fetch한다", async () => {
     const { retrieve, list } = getNotionMocks();
     const lastEdited = "2024-01-01T00:00:00.000Z";
     retrieve.mockResolvedValue(makePageResponse("root-id", "루트", lastEdited));
+    list.mockResolvedValueOnce(makeBlocksResponse([])); // no children
 
     const existingCache = new Map<string, CachedNotionPage>([
       [
@@ -95,8 +96,42 @@ describe("crawlAllPages", () => {
 
     const result = await crawlAllPages("root-id", existingCache);
 
-    expect(list).not.toHaveBeenCalled();
+    expect(list).toHaveBeenCalledTimes(1);
     expect(result[0].content).toBe("캐시된 내용");
+  });
+
+  it("캐시 히트된 부모 페이지라도 자식 페이지는 방문한다", async () => {
+    const { retrieve, list } = getNotionMocks();
+    const lastEdited = "2024-01-01T00:00:00.000Z";
+
+    retrieve
+      .mockResolvedValueOnce(makePageResponse("root-id", "루트", lastEdited))
+      .mockResolvedValueOnce(makePageResponse("child-id", "자식", "2024-01-02T00:00:00.000Z"));
+
+    // root is cache hit, but still needs to fetch blocks to find children
+    list
+      .mockResolvedValueOnce(makeBlocksResponse(["child-id"])) // root's blocks (for child discovery)
+      .mockResolvedValueOnce(makeBlocksResponse([])); // child's blocks
+
+    const existingCache = new Map<string, CachedNotionPage>([
+      [
+        "root-id",
+        {
+          id: "root-id",
+          title: "루트",
+          url: "https://www.notion.so/rootid",
+          content: "캐시된 내용",
+          lastSyncedAt: "2024-01-01T00:00:00.000Z",
+          lastEditedAt: lastEdited,
+        },
+      ],
+    ]);
+
+    const result = await crawlAllPages("root-id", existingCache);
+
+    expect(result).toHaveLength(2);
+    expect(result.find((p) => p.id === "root-id")?.content).toBe("캐시된 내용");
+    expect(result.find((p) => p.id === "child-id")).toBeDefined();
   });
 
   it("제목에 '이전'이 포함된 페이지와 그 자식은 결과에 포함되지 않는다", async () => {
