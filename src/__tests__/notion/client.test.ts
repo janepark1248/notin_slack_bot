@@ -163,6 +163,45 @@ describe("crawlAllPages", () => {
     expect(result.map((p) => p.id)).toContain("child-id");
   });
 
+  it("toggle 블록 안에 있는 child_page도 발견한다", async () => {
+    const { retrieve, list } = getNotionMocks();
+
+    retrieve
+      .mockResolvedValueOnce(makePageResponse("root-id", "루트", "2024-01-02T00:00:00.000Z"))
+      .mockResolvedValueOnce(makePageResponse("nested-child-id", "중첩 자식", "2024-01-02T00:00:00.000Z"));
+
+    // root page blocks: contains a toggle block with has_children=true (not a child_page directly)
+    const toggleBlockId = "toggle-block-id";
+    list
+      .mockResolvedValueOnce({
+        results: [
+          {
+            type: "toggle",
+            id: toggleBlockId,
+            has_children: true,
+            toggle: { rich_text: [{ plain_text: "토글" }] },
+          },
+        ],
+        has_more: false,
+        next_cursor: null,
+      })
+      // toggle block's children: contains a child_page
+      .mockResolvedValueOnce({
+        results: [
+          { type: "child_page", id: "nested-child-id", child_page: { title: "중첩 자식" } },
+        ],
+        has_more: false,
+        next_cursor: null,
+      })
+      // nested-child-id's blocks (when visited): no children
+      .mockResolvedValueOnce(makeBlocksResponse([]));
+
+    const result = await crawlAllPages("root-id");
+
+    expect(result).toHaveLength(2);
+    expect(result.map((p) => p.id)).toContain("nested-child-id");
+  });
+
   it("캐시에 있던 페이지가 트리에서 사라지면 결과에서 제거된다", async () => {
     const { retrieve, list } = getNotionMocks();
     retrieve.mockResolvedValue(makePageResponse("root-id", "루트", "2024-01-02T00:00:00.000Z"));
