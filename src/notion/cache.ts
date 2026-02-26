@@ -49,7 +49,8 @@ function saveToFile(): void {
 
 export async function syncNow(): Promise<number> {
   console.log("[cache] Starting Notion sync...");
-  const pages = await crawlAllPages(config.notion.rootPageId);
+  const existingCacheMap = new Map(cachedPages.map((p) => [p.id, p]));
+  const pages = await crawlAllPages(config.notion.rootPageId, existingCacheMap);
   cachedPages = pages;
   saveToFile();
   console.log(`[cache] Sync complete: ${pages.length} pages cached`);
