@@ -77,6 +77,7 @@ async function crawlPage(pageId: string): Promise<CachedNotionPage> {
     url: getPageUrl(pageId),
     content,
     lastSyncedAt: new Date().toISOString(),
+    lastEditedAt: "",
   };
 }
 

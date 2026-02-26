@@ -4,6 +4,7 @@ export interface CachedNotionPage {
   url: string;
   content: string;
   lastSyncedAt: string;
+  lastEditedAt: string;   // 추가: Notion의 last_edited_time
 }
 
 export interface NotionCache {
